@@ -18,6 +18,7 @@
 #include <asm/uaccess.h>
 #include <asm/unistd.h>
 #ifdef CONFIG_KSU_SUSFS
+#include <linux/susfs.h>  
 #include <linux/susfs_def.h>
 #endif
 
