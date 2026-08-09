@@ -18,6 +18,7 @@
 #include "ratelimiter.h"
 #include <linux/siphash.h>
 #include <linux/mm.h>
+#include <linux/sysinfo.h> 
 #include <linux/slab.h>
 #include <net/ip.h>
 
@@ -169,8 +170,9 @@ err_oom:
 
 int wg_ratelimiter_init(void)
 {
-    unsigned long total_pages = totalram_pages(); 
-    unsigned long table_size; 
+    unsigned long total_pages;
+    unsigned long table_size;
+    struct sysinfo si;
     
     mutex_lock(&init_lock);
     if (++init_refcnt != 1)
@@ -179,7 +181,7 @@ int wg_ratelimiter_init(void)
     entry_cache = KMEM_CACHE(ratelimiter_entry, 0);
     if (!entry_cache)
         goto err;
-	
+
     si_meminfo(&si);
     total_pages = si.totalram;
 
@@ -188,36 +190,36 @@ int wg_ratelimiter_init(void)
      * we borrow their wisdom about good table sizes on different systems
      * dependent on RAM. This calculation here comes from there.
      */
-    table_size = (total_pages > (1U << 30) / PAGE_SIZE) ? 8192 : 
+    table_size = (total_pages > (1U << 30) / PAGE_SIZE) ? 8192 :
         max_t(unsigned long, 16, roundup_pow_of_two(
-            (total_pages << PAGE_SHIFT) /  
+            (total_pages << PAGE_SHIFT) /
             (1U << 14) / sizeof(struct hlist_head)));
     max_entries = table_size * 8;
 
-	table_v4 = kvcalloc(table_size, sizeof(*table_v4), GFP_KERNEL);
-	if (unlikely(!table_v4))
-		goto err_kmemcache;
+    table_v4 = kvcalloc(table_size, sizeof(*table_v4), GFP_KERNEL);
+    if (unlikely(!table_v4))
+        goto err_kmemcache;
 
 #if IS_ENABLED(CONFIG_IPV6)
-	table_v6 = kvcalloc(table_size, sizeof(*table_v6), GFP_KERNEL);
-	if (unlikely(!table_v6)) {
-		kvfree(table_v4);
-		goto err_kmemcache;
-	}
+    table_v6 = kvcalloc(table_size, sizeof(*table_v6), GFP_KERNEL);
+    if (unlikely(!table_v6)) {
+        kvfree(table_v4);
+        goto err_kmemcache;
+    }
 #endif
 
-	queue_delayed_work(system_power_efficient_wq, &gc_work, HZ);
-	get_random_bytes(&key, sizeof(key));
+    queue_delayed_work(system_power_efficient_wq, &gc_work, HZ);
+    get_random_bytes(&key, sizeof(key));
 out:
-	mutex_unlock(&init_lock);
-	return 0;
+    mutex_unlock(&init_lock);
+    return 0;
 
 err_kmemcache:
-	kmem_cache_destroy(entry_cache);
+    kmem_cache_destroy(entry_cache);
 err:
-	--init_refcnt;
-	mutex_unlock(&init_lock);
-	return -ENOMEM;
+    --init_refcnt;
+    mutex_unlock(&init_lock);
+    return -ENOMEM;
 }
 
 void wg_ratelimiter_uninit(void)
