@@ -179,6 +179,9 @@ int wg_ratelimiter_init(void)
     entry_cache = KMEM_CACHE(ratelimiter_entry, 0);
     if (!entry_cache)
         goto err;
+	
+    si_meminfo(&si);
+    total_pages = si.totalram;
 
     /* xt_hashlimit.c uses a slightly different algorithm for ratelimiting,
      * but what it shares in common is that it uses a massive hashtable. So,
