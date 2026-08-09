@@ -169,24 +169,27 @@ err_oom:
 
 int wg_ratelimiter_init(void)
 {
-	mutex_lock(&init_lock);
-	if (++init_refcnt != 1)
-		goto out;
+    unsigned long total_pages = totalram_pages(); 
+    unsigned long table_size; 
+    
+    mutex_lock(&init_lock);
+    if (++init_refcnt != 1)
+        goto out;
 
-	entry_cache = KMEM_CACHE(ratelimiter_entry, 0);
-	if (!entry_cache)
-		goto err;
+    entry_cache = KMEM_CACHE(ratelimiter_entry, 0);
+    if (!entry_cache)
+        goto err;
 
-	/* xt_hashlimit.c uses a slightly different algorithm for ratelimiting,
-	 * but what it shares in common is that it uses a massive hashtable. So,
-	 * we borrow their wisdom about good table sizes on different systems
-	 * dependent on RAM. This calculation here comes from there.
-	 */
-	table_size = (totalram_pages() > (1U << 30) / PAGE_SIZE) ? 8192 :
-		max_t(unsigned long, 16, roundup_pow_of_two(
-			(totalram_pages() << PAGE_SHIFT) /
-			(1U << 14) / sizeof(struct hlist_head)));
-	max_entries = table_size * 8;
+    /* xt_hashlimit.c uses a slightly different algorithm for ratelimiting,
+     * but what it shares in common is that it uses a massive hashtable. So,
+     * we borrow their wisdom about good table sizes on different systems
+     * dependent on RAM. This calculation here comes from there.
+     */
+    table_size = (total_pages > (1U << 30) / PAGE_SIZE) ? 8192 : 
+        max_t(unsigned long, 16, roundup_pow_of_two(
+            (total_pages << PAGE_SHIFT) /  
+            (1U << 14) / sizeof(struct hlist_head)));
+    max_entries = table_size * 8;
 
 	table_v4 = kvcalloc(table_size, sizeof(*table_v4), GFP_KERNEL);
 	if (unlikely(!table_v4))
